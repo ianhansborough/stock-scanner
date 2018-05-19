@@ -1,3 +1,3 @@
 .env
 runtime.log
-nasdaq_last_prices.csv
+last_poll_prices.csv
