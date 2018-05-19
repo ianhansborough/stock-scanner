@@ -1,3 +1,8 @@
+# TODO - Instead of throwing out old polls, timestamp + merge them into a large historical data csv
+# TODO - Poll NYSE stocks in addition to NASDAQ stocks
+
+
+
 import pandas as pd
 import time, os, logging
 import requests
@@ -11,8 +16,10 @@ logging.basicConfig(filename="runtime.log", level=logging.INFO)
 dotenv_path = join(dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-DROP_TRIGGER = 0.01         # Desired drop percentage required to trigger an alert
-DROP_GAP = 60               # Number of minutes between polls
+DROP_TRIGGER =      0.01        # Desired drop percentage required to trigger an alert
+DROP_GAP =          60          # Number of minutes between polls
+MIN_MARKET_CAP =    2000000000  # Minimum market cap for polled stocks
+SECTORS =           ["Technology", "Consumer Durables", "Finance", "Consumer Services", "Health Care"]
 
 AV_API_KEYS = ["FQ5B9LTU9V93PR1F"]
 TWILIO_ACCOUNT = os.environ.get("TWILIO_ACCOUNT")
@@ -26,7 +33,7 @@ def main():
 
     keygen = av_keygen()
     df = pd.read_csv("./company_list_nasdaq.csv")
-    df = df[(df["Sector"] == "Technology") & (df["MarketCap"] > 2000000000)]
+    df = df[(df["Sector"].isin(SECTORS)) & (df["MarketCap"] > MIN_MARKET_CAP)]
     df = df[["Sector", "MarketCap", "Symbol", "Name"]]
 
     symbols = df["Symbol"].values
