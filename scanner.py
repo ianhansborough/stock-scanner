@@ -49,8 +49,8 @@ def main():
             last_ts = last_df["Timestamp"].values.astype('datetime64[m]')[0]
             current_ts = df["Timestamp"].values.astype('datetime64[m]')[0]
             dt = (current_ts - last_ts).item().total_seconds()
-            log("Time difference", dt, (DROP_GAP-5)*60, (DROP_GAP*2-5)*60)
-            
+            log("Time difference" + str(dt) + str((DROP_GAP-5)*60) + str((DROP_GAP*2-5)*60))
+
             if (dt > (DROP_GAP-5)*60) and (dt < (DROP_GAP*2-5)*60):
                 # time difference matches up, proceed to compare and text_alert
                 last_df.rename(columns={"Price": "LastPrice"}, inplace=True)
