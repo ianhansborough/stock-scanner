@@ -54,6 +54,7 @@ def main():
                 last_df.rename(columns={"Price": "LastPrice"}, inplace=True)
                 df3 = pd.merge(df,last_df, on="Symbol", how="inner")
                 df3["PercentDrop"] = df3.apply(price_drop_for_row, axis=1)
+                df3 = df3.sort_values(by="PercentDrop", ascending=False)
                 print(df3.head())
         except Exception as e:
             log(e, log_type=logging.WARNING)
