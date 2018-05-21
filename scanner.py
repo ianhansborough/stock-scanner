@@ -1,7 +1,4 @@
 # TODO - Instead of throwing out old polls, timestamp + merge them into a large historical data csv
-# TODO - Poll NYSE stocks in addition to NASDAQ stocks
-
-
 
 import pandas as pd
 import time, os, logging
@@ -16,7 +13,7 @@ logging.basicConfig(filename="runtime.log", level=logging.INFO)
 dotenv_path = join(dirname(__file__), ".env")
 load_dotenv(dotenv_path)
 
-DROP_TRIGGER =      0.01        # Desired drop percentage required to trigger an alert
+DROP_TRIGGER =      0.025        # Desired drop percentage required to trigger an alert
 DROP_GAP =          60          # Number of minutes between polls
 MIN_MARKET_CAP =    2000000000  # Minimum market cap for polled stocks
 SECTORS =           ["Technology", "Consumer Durables", "Finance", "Consumer Services", "Health Care"]
@@ -30,40 +27,39 @@ twilio = TW_Client(TWILIO_ACCOUNT, TWILIO_TOKEN)
 
 
 def main():
+    while True:
+        keygen = av_keygen()
+        df_nasdaq = pd.read_csv("./company_list_nasdaq.csv")
+        df_nasdaq = df_nasdaq[(df_nasdaq["Sector"].isin(SECTORS)) & (df_nasdaq["MarketCap"] > MIN_MARKET_CAP)]
+        df_nasdaq = df_nasdaq[["Sector", "MarketCap", "Symbol", "Name"]]
+        symbols = df_nasdaq["Symbol"].values
+        df2_nasdaq = data_for_symbols(symbols,keygen)
+        df_nasdaq = pd.merge(df_nasdaq,df2_nasdaq, on="Symbol", how="inner")
 
-    keygen = av_keygen()
-    df_nasdaq = pd.read_csv("./company_list_nasdaq.csv")
-    df_nasdaq = df_nasdaq[(df_nasdaq["Sector"].isin(SECTORS)) & (df_nasdaq["MarketCap"] > MIN_MARKET_CAP)]
-    df_nasdaq = df_nasdaq[["Sector", "MarketCap", "Symbol", "Name"]]
-    symbols = df_nasdaq["Symbol"].values
-    df2_nasdaq = data_for_symbols(symbols,keygen)
-    df_nasdaq = pd.merge(df_nasdaq,df2_nasdaq, on="Symbol", how="inner")
+        df_nyse = pd.read_csv("./company_list_nyse.csv")
+        df_nyse = df_nyse[(df_nyse["Sector"].isin(SECTORS)) & (df_nyse["MarketCap"] > MIN_MARKET_CAP)]
+        df_nyse = df_nyse[["Sector", "MarketCap", "Symbol", "Name"]]
+        symbols = df_nyse["Symbol"].values
+        df2_nyse = data_for_symbols(symbols,keygen)
+        df_nyse = pd.merge(df_nyse,df2_nyse, on="Symbol", how="inner")
 
-    df_nyse = pd.read_csv("./company_list_nyse.csv")
-    df_nyse = df_nyse[(df_nyse["Sector"].isin(SECTORS)) & (df_nyse["MarketCap"] > MIN_MARKET_CAP)]
-    df_nyse = df_nyse[["Sector", "MarketCap", "Symbol", "Name"]]
-    symbols = df_nyse["Symbol"].values
-    df2_nyse = data_for_symbols(symbols,keygen)
-    df_nyse = pd.merge(df_nyse,df2_nyse, on="Symbol", how="inner")
+        df = df_nasdaq.append(df_nyse)
+        try:
+            last_df = pd.read_csv("last_poll_prices.csv")
+            last_ts = last_df["Timestamp"].values.astype('datetime64[m]')[0]
+            current_ts = df["Timestamp"].values.astype('datetime64[m]')[0]
+            dt = (current_ts - last_ts).item().total_seconds()
+            if (dt > (DROP_GAP-5)*60) and (dt < (DROP_GAP*2-5)*60):
+                # time difference matches up, proceed to compare and text_alert
+                last_df.rename(columns={"Price": "LastPrice"}, inplace=True)
+                df3 = pd.merge(df,last_df, on="Symbol", how="inner")
+                df3["PercentDrop"] = df3.apply(price_drop_for_row, axis=1)
+                print(df3.head())
+        except Exception as e:
+            log(e, log_type=logging.WARNING)
 
-    df = df_nasdaq.append(df_nyse)
-    try:
-        last_df = pd.read_csv("last_poll_prices.csv")
-        last_ts = last_df["Timestamp"].values.astype('datetime64[m]')[0]
-        current_ts = df["Timestamp"].values.astype('datetime64[m]')[0]
-        dt = (current_ts - last_ts).item().total_seconds()
-        if (dt > (DROP_GAP-5)*60) and (dt < (DROP_GAP*2-5)*60):
-            # time difference matches up, proceed to compare and text_alert
-            last_df.rename(columns={"Price": "LastPrice"}, inplace=True)
-            df3 = pd.merge(df,last_df, on="Symbol", how="inner")
-            df3["PercentDrop"] = df3.apply(price_drop_for_row, axis=1)
-            print(df3.head())
-        # save new values as last price csv
-    except Exception as e:
-        log(e, log_type=logging.WARNING)
-        
-    df.to_csv("last_poll_prices.csv")
-    wait_for_next_poll(DROP_GAP)
+        df.to_csv("last_poll_prices.csv")
+        wait_for_next_poll(DROP_GAP)
 
 
 def price_drop_for_row(row):
